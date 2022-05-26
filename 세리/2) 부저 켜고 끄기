@@ -1,0 +1,43 @@
+/* mbed Microcontroller Library
+ * Copyright (c) 2019 ARM Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include "mbed.h"
+#include "platform/mbed_thread.h"
+AnalogIn ain(A0) ; 
+PwmOut pb(D7);
+int i =0;
+
+Serial pc(SERIAL_TX,SERIAL_RX);
+
+int main()
+{
+   // pb.write(0.5);
+    pc.baud(115200);
+    
+    while (true) {
+
+    
+        
+        i = ain.read_u16();
+        pc.printf("%d\r\n", i);
+        if (i<10000){
+            pb.write(0.5);
+            pb.period_us(100000/262);
+            //wait(0.25);
+            
+            
+            }
+            
+        else if (i>=10000){
+            pb.write(0.0f);
+            
+            
+            }
+            
+        
+        
+    }
+    
+}
