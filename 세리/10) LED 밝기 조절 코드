@@ -1,0 +1,17 @@
+#include "mbed.h"
+ 
+PwmOut led(D3);
+PwmOut led2(D4);
+ 
+int main() {
+    // specify period first
+    led.period(0.01f);      // 4 second period
+    led.write(0.05f);      // 50% duty cycle, relative to period
+    
+    led2.period(0.01f);      // 4 second period
+    led2.write(0.50f);      // 50% duty cycle, relative to period
+
+    //led = 0.5f;          // shorthand for led.write()
+    //led.pulsewidth(2);   // alternative to led.write, set duty cycle time in seconds
+    while(1);
+}
