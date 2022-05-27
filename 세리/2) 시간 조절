@@ -1,0 +1,43 @@
+/* mbed Microcontroller Library
+ * Copyright (c) 2019 ARM Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include "mbed.h"
+
+Timer timer;
+
+
+AnalogIn ain(A0) ; 
+PwmOut pb(D7);
+int i =0;
+int a = 0;
+
+Serial pc(SERIAL_TX,SERIAL_RX);
+
+int main()
+{
+   // pb.write(0.5);
+    pc.baud(115200);
+    
+    while (true) {
+
+    
+        
+        timer.start();
+        printf("Hello mbed!!\n");
+        timer.stop();
+        a = timer.read();
+        printf("timer read ---> %d\n", a);
+        
+        if (a == 3){
+            timer.reset();
+            
+            }
+        //timer.reset();
+            
+        
+        
+    }
+    
+}
