@@ -10,7 +10,7 @@ Timer timer;  //시간 세기 위해서 필요
 
 AnalogIn ain(A0) ; // 적외선 센서
 PwmOut pb(D7);  //부저
-PwmOut led1(D2);  //LED1
+PwmOut led1(D5);  //LED1
 int i =0;   //적외선 센서값 변수
 int a = 0;  //시간 세는 변수
 
