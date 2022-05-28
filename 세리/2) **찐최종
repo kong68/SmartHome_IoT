@@ -1,0 +1,68 @@
+/* mbed Microcontroller Library
+ * Copyright (c) 2019 ARM Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include "mbed.h"
+
+Timer timer;  //시간 세기 위해서 필요
+
+
+AnalogIn ain(A0) ; // 적외선 센서
+PwmOut pb(D7);  //부저
+PwmOut led1(D2);  //LED1
+int i =0;   //적외선 센서값 변수
+int a = 0;  //시간 세는 변수
+
+Serial pc(SERIAL_TX,SERIAL_RX);
+
+void time_count(){
+    timer.start();  //타이머 스타트
+    printf("Hello mbed!!\n");
+    timer.stop();  //타이머 스탑
+    a = timer.read();  //값 읽어오기
+    printf("timer read ---> %d\n", a); //확인을 위해 출력
+    
+    
+    }
+    
+    
+    
+void danger_buzer(){ // 현관앞 센싱 확인 함수
+    
+        i = ain.read_u16();  //적외선 값 받아오기
+        pc.printf("%d\r\n", i);  //확인을 위해 출력
+
+    
+        if (i<10300){  //현관과 가까운 경우
+            time_count();
+            if (a>3){  // 10초 이상 문앞에 뭔가 있을 경우
+                pb.write(0.3f);  
+                pb.period_us(100000/262); //경고음 출력
+                led1.write(1.0f); //LED 밝음
+                }
+
+            }
+            
+        else if (i>=10300){  //현관에서 멀어진 경우
+            pb.write(0.0f);  //부저 정지
+            timer.reset();  //문앞에서 멀어질 경우 시간 리셋
+            led1.write(0.0f); //LED 밝음
+
+            }
+    
+    } 
+
+int main()
+{
+    pc.baud(115200);
+    led1.period(0.01f);    
+    
+    while (true) {
+
+       danger_buzer();
+         
+        
+    }
+    
+}
