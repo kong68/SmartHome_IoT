@@ -1,0 +1,99 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using System.IO.Ports;
+using System.Text;
+using System.Threading.Tasks;
+
+
+public class blinking : MonoBehaviour
+{
+
+
+    SerialPort sp = new SerialPort("COM4", 115200, Parity.None, 8, StopBits.None);     //시리얼 포트 열어주기(포트 번호는 4)
+    public static byte[] parsing_send_data = new byte[8];
+    public static int recv_num = 0;
+
+
+    void Start()                            // 시작시 1 번 실행
+    {
+
+        sp.Open();              //포트 열어줌
+        sp.ReadTimeout = 100;
+
+        foreach (string str in SerialPort.GetPortNames())
+        {
+            Debug.Log(string.Format("Existing COM port: {0}", str));
+        }
+    }
+
+
+
+    // Update is called once per frame
+    void Update()
+    {
+        sp_Check();
+
+        if (Input.GetKeyDown(KeyCode.A))//준호님  부분
+        {
+            Debug.Log("A");
+            parsing_send_data[0] = 65;// A
+            sp.Write(parsing_send_data, 0, 1);
+            //Debug.LogError("A");
+        }
+
+        if (Input.GetKeyDown(KeyCode.W))
+        {
+            Debug.LogError("W"); // W가 입력받았다고 띄우기 위함
+            parsing_send_data[0] = 87;// 이걸 char로 바꾸면 W이 된다.
+            sp.Write(parsing_send_data, 0, 1); //엠베드에게 데이터를 파싱을 보내 LCD 제어를 한다.
+        }
+        else if (Input.GetKeyDown(KeyCode.L))
+        {
+            Debug.LogError("L"); // L가 입력받았다고 띄우기 위함
+            parsing_send_data[0] = 76;// 이걸 char로 바꾸면 L가 된다.
+            sp.Write(parsing_send_data, 0, 1); //엠베드에게 데이터를 파싱을 보내 LCD 제어를 한다.
+        }
+        else if (Input.GetKeyDown(KeyCode.M))
+        {
+            Debug.LogError("M"); // M가 입력받았다고 띄우기 위함
+            parsing_send_data[0] = 77;// 이걸 char로 바꾸면 M가 된다.
+            sp.Write(parsing_send_data, 0, 1); //엠베드에게 데이터를 파싱을 보내 LCD 제어를 한다.
+
+        }
+        else if (Input.GetKeyDown(KeyCode.C))
+        {
+            Debug.LogError("C"); // C가 입력받았다고 띄우기 위함
+            parsing_send_data[0] = 67;// 이걸 char로 바꾸면 C가 된다.
+            sp.Write(parsing_send_data, 0, 1); //엠베드에게 데이터를 파싱을 보내 LCD 제어를 한다.
+
+        }
+        else if (Input.GetKeyDown(KeyCode.D))
+        {
+            Debug.LogError("D"); // D가 입력받았다고 띄우기 위함
+            parsing_send_data[0] = 68;// 이걸 char로 바꾸면 D가 된다.
+            sp.Write(parsing_send_data, 0, 1); //엠베드에게 데이터를 파싱을 보내 LCD 제어를 한다.
+
+        }
+
+    }
+
+
+    public void sp_Check()
+    {
+        if (sp.IsOpen)          //포트 열리면
+        {
+            try
+            {
+
+            }
+            catch (System.Exception e)
+            {
+                print(e);
+                sp.Close();
+                throw;
+
+            }
+        }
+    }
+}
