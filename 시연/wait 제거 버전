@@ -90,7 +90,7 @@ void flip_set_temp_and_hum(){
 //온도에 따라 에어컨 제어
 void ac_control()
 {
-    flipper.attach(&flip_set_temp_and_hum, 1);
+    flipper.attach(&flip_set_temp_and_hum, 2);
        
        if ((temperature < stop_AC_temp && AC_info == 1) || (temperature > stop_heater_temp && AC_info == 2)|| (humidity<stop_dehum_hum && AC_info == 3) ){ //에어컨 가동 중지
           ledR = 0;
