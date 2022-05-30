@@ -186,6 +186,34 @@ void setD(){
     lcd.print("Press Key: ");
     }
 
+// 조도센서 따라 블라인드 조절
+void blind_control() {
+		// blind.calibrate(0.0005, 45);		   // Default 회전반경
+		// blind.calibrate(0.001, 90);       // 서보모터 회전반경 확장
+    
+    
+        //blind.write(0.5f);						// 블라인드 기본 상태 설정 (닫힘)
+     
+		//조도센서 밝기 읽어오기
+		pc.printf("cds_sensor value -->> %f \n", cds_sensor.read());    // 시리얼모니터 출력
+		wait(0.2);
+		
+		if (cds_sensor > 0.5f)          // 1. 주변이 어두우면
+		{
+            if(flag == 0) {             // 2. 블라인드가 닫혀있으면
+                    blind.write(1.0f);      // 블라인드 오픈
+                    flag = 1;               // 오픈 상태 저장
+            }
+		}
+		else 
+		{                         			// 1. 주변이 밝으면
+            if(flag == 1) {                 // 2. 블라인드가 열려 있으면
+                    blind.write(0.5f);      // 블라인드 클로즈
+                    flag = 0;               // 클로즈 상태 저장
+            }
+		}
+}
+
 
 int main()
 {
@@ -201,27 +229,8 @@ int main()
         ac_control(); //시연
         stove_control(); //시연
         
-       ///////////     준호님 part. => 혹시 코딩하신걸 함수로 빼주실 수 있는지... main문에 많이 들어가는건 좋지 않아보여요...
-                    //조도센서 밝기 읽어오기
-        pc.printf("cds_sensor value -->> %f \n", cds_sensor.read());    // 시리얼모니터 출력
-        wait(0.2);
+        blind_control(); //준호
         
-        if (cds_sensor > 0.5f)          // 1. 주변이 어두우면
-        {
-            if(flag == 0) {             // 2. 블라인드가 닫혀있으면
-                blind.write(1.0f);      // 블라인드 오픈
-                flag = 1;               // 오픈 상태 저장
-            }
-        }
-        else 
-                {                          // 1. 주변이 밝으면
-            if(flag == 1) {             // 2. 블라인드가 열려 있으면
-                blind.write(0.5f);      // 블라인드 클로즈
-                flag = 0;               // 클로즈 상태 저장
-            }
-        }
-            
-      ///////////      
             if(pc.readable()){
                 check = pc.getc();
                 if(num =='A'){
