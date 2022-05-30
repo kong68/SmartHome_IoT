@@ -222,9 +222,10 @@ int main()
     // blind.calibrate(0.0005, 45);   // Default 회전반경
     blind.calibrate(0.001, 90);       // 서보모터 회전반경 확장
     
-    blind.write(0.5f);
+    blind.write(0.5f);		// 블라인드 연결하면 기본 상태 설정 (닫힘 상태로)
     stoveled = 1;
-    stove_info = 1;    
+    stove_info = 1;
+    
     while(true){
         ac_control(); //시연
         stove_control(); //시연
