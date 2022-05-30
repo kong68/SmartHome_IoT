@@ -1,0 +1,347 @@
+
+#include "mbed.h"
+#include "platform/mbed_thread.h"
+#include "LiquidCrystal_I2C.h"
+#include "rtos.h"
+#define BLINKING_RATE_MS   
+#include "DHT.h" //온습도
+#include "Servo.h"//서브모터
+#include "platform/mbed_thread.h"
+
+
+Thread thread;
+Serial pc(SERIAL_TX,SERIAL_RX);
+
+Timer timer;  //시간 세기 위해서 필요
+Ticker flipper;
+
+LiquidCrystal_I2C lcd(0x27,16,2, D14, D15);
+
+AnalogIn ain(A0) ; // 적외선 센서
+AnalogIn cds_sensor(A1);        // 조도센서 변수 선언 //A1로 바꿈
+DHT temp_humi_sensor(A3, DHT11); //A3으로
+
+PwmOut led1(D2);  //LED1
+PwmOut led2(D3);  //LED2
+PwmOut led3(D4);  //LED3
+PwmOut led4(D5);  //led4
+//PWM 기능 이용
+PwmOut led5(D6);   
+PwmOut pb(D7);  //부저
+DigitalOut ledR(D8); //난방 = 8
+DigitalOut ledG(D9); //제습 =9 
+DigitalOut ledB(D10); //에어컨 =10
+DigitalOut stoveled(D11); //가스레인지 11
+Servo blind(D13);                // 서보모터 변수 선언 > 블라인드 13
+
+
+float temperature; //온도 
+float humidity; //습도
+int sensorErrorResult = 0;
+
+int i =0;   //적외선 센서값 변수
+int a = 0;  //시간 세는 변수
+
+char check=0;
+char num=0;
+int time_rate=500;
+bool flag=false;
+int blind_flag = 1;                   // 블라인드 상태를 저장하는 변수
+
+
+//에어컨 조절을 위한 변수
+float AC_temp = 26; //해당 온도(26도)보다 실내온도(측정온도)가 높다면 에어컨 가동
+float heater_temp = 18; // 해당 온도(16도)보다 낮다면 난방 가동
+float dehum_hum = 60;// 해당 습도(60)보다 높을 시 제습기 가동
+float stop_AC_temp = 18; //해당 온도(18)보다 실내온도(측정온도)가 낮다면 에어컨 가동 중지
+float stop_heater_temp = 26; // 해당 온도(36도)보다 높다면 난방 가동 중지
+float stop_dehum_hum = 35;// 해당 습도(35)보다 낮다면  제습기 가동 중지
+int AC_info = 0; //0 : OFF, 1 : 에어컨, 2 : 난방, 3: 제습기
+
+
+float rain_hum = 80; //해당 습도보다 높은 경우 비올 확률이 높다 가정
+float stop_stove_temp = 25; //30도가 넘으면 가스레인지 자동 꺼짐 가정
+int stove_info = 0; //0:off, 1:on
+
+//실내온도 측정
+void set_temp_and_hum(){
+    sensorErrorResult = temp_humi_sensor.readData();
+    if (sensorErrorResult == 0)
+    {
+        temperature = temp_humi_sensor.ReadTemperature(CELCIUS);
+        humidity = temp_humi_sensor.ReadHumidity();
+        // NO ERROR
+        // 온도
+        pc.printf("No Error \n");
+        pc.printf("Temperature(C) ---> %.2fC\n", temperature);       // 섭씨(C)
+        
+        //습도
+        pc.printf("Humidity(%%) ---> %.2f%%\n", humidity);      // 습도
+    }
+        else
+    {
+        // ERROR
+        pc.printf("Error \n");
+        pc.printf("Error Code ---> %d \n", sensorErrorResult);
+    }
+    
+    wait(2);//측정주기
+    
+    }
+
+//온도에 따라 에어컨 제어
+void ac_control()
+{
+    set_temp_and_hum();
+       
+       if ((temperature < stop_AC_temp && AC_info == 1) || (temperature > stop_heater_temp && AC_info == 2)|| (humidity<stop_dehum_hum && AC_info == 3) ){ //에어컨 가동 중지
+          ledR = 0;
+            ledG = 0;
+            ledB = 0;
+            AC_info = 0;
+        }
+        else if (temperature > AC_temp && AC_info != 2) { //에어컨 가동
+
+            ledR = 0;
+            ledG = 0;
+            ledB = 1;
+            AC_info = 1;   
+        }
+        
+        else if (temperature < heater_temp && AC_info != 1) {//난방 가동
+            
+            ledR = 1;
+            ledG = 0;
+            ledB = 0;
+            
+            AC_info = 2;
+        }
+        else if (humidity > dehum_hum && AC_info != 1 && AC_info != 2) { //제습기 가동
+            
+            ledR = 0;
+            ledG = 1;
+            ledB = 0;
+            
+            AC_info = 3;
+        }  
+    
+}
+
+//우산 알림
+void umbrella_check(){
+    if(humidity > rain_hum ){
+        //LCD 출력문 코드 
+        lcd.init();
+        lcd.backlight();
+        lcd.setCursor(0,0);
+        lcd.print("Take your");
+        lcd.setCursor(0,1);
+        lcd.print("umbrella");
+        }
+
+}
+
+//가스레인지 과열방지(일정온도 이상이면 자동 점멸, 부저울림)
+void stove_control(){
+    if(temperature > stop_stove_temp && stove_info == 1){
+         pb.write(0.3f);  
+                pb.period_us(100000/262); //경고음 출력
+        stove_info = 0;
+        stoveled = 0;
+        }
+        else if (temperature > stop_stove_temp && stove_info == 0){//가스레인지가 꺼지면 부저 출력 중지
+         pb.write(0.0f);  
+        }
+}
+
+
+//LCD제어 부분 함수 setW(), setL(), setM(),setC(), setD()
+void setW(){
+    lcd.setCursor(0,0);
+    lcd.print("temperture: ");
+    lcd.print(temperature);
+    lcd.print("C");
+    lcd.setCursor(0,1);
+    lcd.print("humidity: ");
+    lcd.print(humidity);
+    lcd.print("%");
+    }
+    
+void setL(){
+    lcd.init();
+    lcd.backlight();
+    lcd.setCursor(0,0);
+    lcd.print("Light: ");
+    lcd.print(cds_sensor.read());
+    }
+
+void setM(){ //만약 문 앞 적외선 센싱 된다면 이거 출력할 수 있게 함수 변경 필요
+    lcd.init();
+    lcd.backlight();
+    lcd.setCursor(0,0);
+    lcd.print("Stock: ");
+    }
+    
+void setC(){
+    lcd.init();
+    lcd.backlight();
+    lcd.setCursor(0,0);
+    lcd.print("Air state: ");
+    lcd.setCursor(0,1);
+    lcd.print("window state: ");
+    }
+    
+void setD(){
+    lcd.init();
+    lcd.backlight();
+    lcd.setCursor(0,0);
+    lcd.print("Press Key: ");
+    }
+
+// 조도센서 따라 블라인드 조절
+void blind_control() {
+        // blind.calibrate(0.0005, 45);        // Default 회전반경
+        // blind.calibrate(0.001, 90);       // 서보모터 회전반경 확장
+    
+    
+        //blind.write(0.5f);                        // 블라인드 기본 상태 설정 (닫힘)
+     
+        //조도센서 밝기 읽어오기
+        pc.printf("cds_sensor value -->> %f \n", cds_sensor.read());    // 시리얼모니터 출력
+        wait(0.2);
+        
+        if (cds_sensor > 0.5f)          // 1. 주변이 어두우면
+        {
+            if(flag == 0) {             // 2. 블라인드가 닫혀있으면
+                    blind.write(1.0f);      // 블라인드 오픈
+                    flag = 1;               // 오픈 상태 저장
+            }
+        }
+        else 
+        {                                   // 1. 주변이 밝으면
+            if(flag == 1) {                 // 2. 블라인드가 열려 있으면
+                    blind.write(0.5f);      // 블라인드 클로즈
+                    flag = 0;               // 클로즈 상태 저장
+            }
+        }
+}
+
+bool check_HZ = true; //100Hz로 작동하게 하기 위해 타이머가 돌았는지 확인 하기 위한 변수 
+
+void flip(){
+    check_HZ = false; // 타이머가 작동했을 시 check를 false로 바꾸어준다
+    }
+     
+void time_count(){
+    timer.start();  //타이머 스타트
+    printf("Hello mbed!!\n");
+    timer.stop();  //타이머 스탑
+    a = timer.read();  //값 읽어오기
+    printf("timer read ---> %d\n", a); //확인을 위해 출력
+    }     
+     
+void danger_buzer(){
+    if( check_HZ == false){ //만약 check가 false 즉, 설정 주기에 맞게 타이머가 작동을 하면
+        check_HZ = true; //다시 check값을 true로 바꾸어 다음 타이머 작동을 확인 할 수 있게 한다
+          
+         i = ain.read_u16();
+         pc.printf("%d\r\n", i);
+            if (i<10300){  //현관과 가까운 경우
+            time_count();
+            if (a>3){  // 35초 이상 문앞에 뭔가 있을 경우
+                pb.write(0.3f);  
+                pb.period_us(100000/262); //경고음 출력
+                led4.write(0.3f); //LED 반복해서 점멸
+                }
+            }
+            
+        else if (i>=10300){  //현관에서 멀어진 경우
+            pb.write(0.0f);  //부저 정지
+            timer.reset();  //문앞에서 멀어질 경우 시간 리셋
+            led4.write(0.0f); //LED 끔
+            }      
+        }    
+    }     
+
+    
+void LED_ON(){
+    if( check_HZ == false){ //만약 check가 false 즉, 설정 주기에 맞게 타이머가 작동을 하면
+        check_HZ = true; //다시 check값을 true로 바꾸어 다음 타이머 작동을 확인 할 수 있게 한다
+          
+         i = ain.read_u16();  //적외선 값 받아오기
+         pc.printf("%d\r\n", i);  //확인을 위해 출력
+    
+        if (i<10000){  //적외선과 가장 가까운곳 ex) 거실
+
+            led1.write(0.0f); //LED꺼짐
+            led2.write(0.05f); //LED 살짝 어두움
+            led3.write(1.0f); //LED 밝음
+            
+            if (i<9900){
+                led2.write(0.0f); //LED 꺼짐
+                }
+            }
+        else if (i>=10000&&i<10300){  // 중간 ex) 복도
+            led1.write(0.05f); //LED 살짝 어두움 
+            led2.write(1.0f);  //LED 밝음
+            led3.write(0.0f);  //LED 꺼짐
+            }
+        else if (i>10300){   //적외선과 가장 먼곳 ex) 신발장
+            led1.write(1.0f); //LED 밝음
+            led2.write(0.0f);  //LED 꺼짐
+            led3.write(0.0f);  //LED 꺼짐
+            }
+        } 
+    }  
+    
+    
+//메인 함수 부분
+int main()
+{
+    pc.baud(115200);
+    setD();
+    // blind.calibrate(0.0005, 45);   // Default 회전반경
+    blind.calibrate(0.001, 90);       // 서보모터 회전반경 확장
+    
+    blind.write(0.5f);      // 블라인드 연결하면 기본 상태 설정 (닫힘 상태로)
+    stoveled = 1;
+    stove_info = 1;
+    
+    led1.period(0.01f);      
+    led2.period(0.01f);
+    led3.period(0.01f);
+    led4.period(1.0f);      // 1 second period
+    flipper.attach(&flip,0.01f); //100Hz로 타이머를 설정한다
+    
+    while(true){
+        ac_control(); //시연
+        stove_control(); //시연
+        
+        blind_control(); //준호
+        
+        danger_buzer(); //세리
+        LED_ON(); //세리
+            if(pc.readable()){
+                check = pc.getc();
+                if(num =='A'){
+                led5 =!led5;
+                    }
+                if(check == 'W'){ //W => Weather 날씨관련 입력 받았을 때,
+                    setW(); //setW 함수 호출
+                    }
+                if(check == 'L'){ //L => Light 조도관련 입력 받았을 때,
+                    setL(); //setL 함수 호출
+                    }
+                if(check == 'M'){ //M => Mail 물건관련 입력 받았을 때,
+                    setM(); //setM 함수 호출
+                    }
+                if(check == 'C'){ //C => Controll 컨트롤관련 입력 받았을 때,
+                    setC(); //setC 함수 호출
+                    }
+                if(check == 'D'){ //D => Controll 컨트롤관련 입력 받았을 때,
+                    setD(); //setD 함수 호출
+                    }
+                }
+            
+            }
+}
