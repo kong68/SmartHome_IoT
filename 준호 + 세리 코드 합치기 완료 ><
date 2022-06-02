@@ -59,7 +59,7 @@ void danger_buzer(){
             if (a>3){  // 35초 이상 문앞에 뭔가 있을 경우
                 pb.write(0.3f);  
                 pb.period_us(100000/262); //경고음 출력
-                led4.write(0.3f); //LED 반복해서 점멸
+                led4.write(1); //LED 반복해서 점멸
                 }
 
             }
