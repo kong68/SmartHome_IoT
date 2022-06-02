@@ -1,0 +1,170 @@
+#include "mbed.h"
+#include "DHT.h"
+#include "rtos.h"
+
+Ticker flipper;
+Ticker timer;
+Thread thread;
+DHT temp_humi_sensor(A3, DHT11); //A3으로
+PwmOut pb(D7);  //부저
+DigitalOut ledR(D8); //난방 = 8
+DigitalOut ledG(D9); //제습 =9 
+DigitalOut ledB(D10); //에어컨 =10
+DigitalOut stoveled(D11); //가스레인지 11
+
+
+
+
+Serial pc(SERIAL_TX, SERIAL_RX);
+
+float temperature; //온도 
+float humidity; //습도
+int sensorErrorResult = 0;
+
+//에어컨 조절을 위한 변수
+float start_AC_temp = 26; //해당 온도(26도)보다 실내온도(측정온도)가 높다면 에어컨 가동
+float start_heater_temp = 18; // 해당 온도(16도)보다 낮다면 난방 가동
+float start_dehum_hum = 60;// 해당 습도(60)보다 높을 시 제습기 가동
+float stop_AC_temp = 18; //해당 온도(18)보다 실내온도(측정온도)가 낮다면 에어컨 가동 중지
+float stop_heater_temp = 26; // 해당 온도(36도)보다 높다면 난방 가동 중지
+float stop_dehum_hum = 35;// 해당 습도(35)보다 낮다면  제습기 가동 중지
+int AC_info = 0; //0 : OFF, 1 : 에어컨, 2 : 난방, 3: 제습기
+
+float rain_hum = 80; //해당 습도보다 높은 경우 비올 확률이 높다 가정
+
+float stop_stove_temp = 25; //30도가 넘으면 가스레인지 자동 꺼짐 가정
+int stove_info = 0; //0:off, 1:on
+
+
+//실내온도 측정(쓰레드 버전)
+void thread_set_temp_and_hum(){
+    while(true){
+        sensorErrorResult = temp_humi_sensor.readData();
+        if (sensorErrorResult == 0)
+        {
+            temperature = temp_humi_sensor.ReadTemperature(CELCIUS);
+            humidity = temp_humi_sensor.ReadHumidity();
+            // NO ERROR
+            // 온도
+            pc.printf("No Error \n");
+            pc.printf("Temperature(C) ---> %.2fC\n", temperature);       // 섭씨(C)
+            
+            //습도
+            pc.printf("Humidity(%%) ---> %.2f%%\n", humidity);      // 습도
+        }
+            else
+        {
+            // ERROR
+            pc.printf("Error \n");
+            pc.printf("Error Code ---> %d \n", sensorErrorResult);
+        }
+        
+        //wait(2);//측정주기
+        Thread::wait(2000);
+    }
+}
+    
+//실내온도 측정(타이머 이용)
+void timer_set_temp_and_hum(){
+   
+    sensorErrorResult = temp_humi_sensor.readData();
+    if (sensorErrorResult == 0)
+    {
+        temperature = temp_humi_sensor.ReadTemperature(CELCIUS);
+        humidity = temp_humi_sensor.ReadHumidity();
+        // NO ERROR
+        // 온도
+        pc.printf("No Error \n");
+        pc.printf("Temperature(C) ---> %.2fC\n", temperature);       // 섭씨(C)
+        
+        //습도
+        pc.printf("Humidity(%%) ---> %.2f%%\n", humidity);      // 습도
+    }
+        else
+    {
+        // ERROR
+        pc.printf("Error \n");
+        pc.printf("Error Code ---> %d \n", sensorErrorResult);
+    }
+    
+    
+    }
+    
+
+//온도에 따라 에어컨 제어
+void ac_control()
+{    
+    //timer.attach(&timer_set_temp_and_hum, 2); //타이머 이용
+    //thread.start(thread_set_temp_and_hum); //쓰레드 이용 
+       if ((temperature < stop_AC_temp && AC_info == 1) || (temperature > stop_heater_temp && AC_info == 2)|| (humidity<stop_dehum_hum && AC_info == 3) ){ //에어컨 가동 중지
+          ledR = 0;
+            ledG = 0;
+            ledB = 0;
+            AC_info = 0;
+        }
+        else if (temperature > start_AC_temp && AC_info != 2) { //에어컨 가동
+
+            ledR = 0;
+            ledG = 0;
+            ledB = 1;
+            AC_info = 1;   
+        }
+        
+        else if (temperature < start_heater_temp && AC_info != 1) {//난방 가동
+            
+            ledR = 1;
+            ledG = 0;
+            ledB = 0;
+            
+            AC_info = 2;
+        }
+        else if (humidity > start_dehum_hum && AC_info != 1 && AC_info != 2) { //제습기 가동
+            
+            ledR = 0;
+            ledG = 1;
+            ledB = 0;
+            
+            AC_info = 3;
+        }
+    
+    
+}
+
+//우산 알림(lcd 출력부분 추가해야함)
+void umbrella_check(){
+    if(humidity > rain_hum ){
+        //LCD 출력문 코드 
+        }
+
+}
+
+//가스레인지 과열방지(일정온도 이상이면 자동 점멸, 부저울림)
+void stove_control(){
+    if(temperature > stop_stove_temp && stove_info == 1){
+         pb.write(0.3f);  
+                pb.period_us(100000/262); //경고음 출력
+        stove_info = 0;
+        stoveled = 0;
+        }
+        else if (temperature > stop_stove_temp && stove_info == 0){//가스레인지가 꺼지면 부저 출력 중지
+         pb.write(0.0f);  
+        }
+}
+
+int main()
+{
+    
+    pc.baud(115200);
+    stoveled = 1;
+    stove_info = 1;
+    while (1)
+    {
+        //timer.attach(&timer_set_temp_and_hum, 2); //타이머 이용
+        thread.start(thread_set_temp_and_hum); //쓰레드 이용 
+        ac_control();
+        stove_control();
+
+
+    }
+
+}
